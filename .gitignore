@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.env
+*.ipynb_checkpoints/
+
+# Node / React
+node_modules/
+build/
+dist/
+.env.local
+
+# Model weights (if not using Git LFS)
+*.pt
+*.onnx
+
+# OS / IDE
+.DS_Store
+.vscode/
+*.log
