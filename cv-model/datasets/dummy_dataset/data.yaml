@@ -1,0 +1,6 @@
+names:
+  0: drone
+  1: bird
+path: C:\Users\Padmaja Kachare\skyguard-ai\cv-model\datasets\dummy_dataset
+train: images
+val: images
