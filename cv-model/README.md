@@ -145,8 +145,29 @@ pytest cv-model/tests/ -v
 
 ---
 
+## Dataset merge (local)
+
+```bash
+# Requires ROBOFLOW_API_KEY in repo-root .env
+python cv-model/scripts/download_datasets.py
+python cv-model/scripts/merge_datasets.py
+# Outputs: datasets/merged/data.yaml (6 classes), datasets/merged_ppe_v1/data.yaml (Week 2 MVP)
+```
+
+Training with class guard:
+
+```bash
+python cv-model/scripts/train_local.py --phase ppe_v1   # GPU recommended
+python cv-model/scripts/write_val_metrics.py --weights cv-model/models/ppe_v1/best.pt \
+  --data cv-model/datasets/merged_ppe_v1/data.yaml --report cv-model/reports/week2_ppe_v1_metrics.md \
+  --title "Week 2 — ppe_v1 validation"
+```
+
+---
+
 ## Progress Log
 
+- `[#3 #15]` Roboflow PPE downloads (v2 hard-hat-workers), name-based merge → 12,691 images; `merge_datasets.py` + `download_datasets.py`
 - `[#1 #2 #3]` Setup: venv, Colab notebook scaffold, Roboflow dataset sourcing plan
 - `[#14]` Training notebook complete — run on Colab to produce `ppe_v1/best.pt`
 - `[#22 #23]` `geofence/restricted_zone.py` + `inference/infer_video.py` written; JSONL schema verified

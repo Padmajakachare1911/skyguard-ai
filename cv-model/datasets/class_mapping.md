@@ -34,6 +34,13 @@ defined in §2.1 of the project spec. The YOLO model is trained on the "YOLO cla
 
 ## Datasets Sourced
 
-| Dataset (Roboflow) | Classes Used | Notes |
-|--------------------|--------------|-------|
-| TBD after download | TBD | Update this table after running dataset download in Colab |
+| Local folder | Roboflow slug | Version | Train images (raw) | Mapped unified classes |
+|--------------|---------------|---------|--------------------|-------------------------|
+| `raw/hard-hat-workers` | `joseph-nelson/hard-hat-workers` | 2 | ~5,628 | `head`→no-helmet, `helmet`, `person` |
+| `raw/construction-site-safety` | `roboflow-universe-projects/construction-site-safety` | 30 | ~573 | PPE + Person + vehicles→machinery |
+| `raw/ppe-detection` | `testcasque/ppe-detection-qlq3d` | 1 | ~4,112 | helmet, no-helmet, vest, no-vest only |
+
+**Merged output (after `scripts/merge_datasets.py`):** 12,691 images · 70/20/10 split ·  
+`datasets/merged/data.yaml` (6 classes) · `datasets/merged_ppe_v1/data.yaml` (Week 2 four-class MVP).
+
+Remapping is **by class name** from each export's `data.yaml` (see `scripts/merge_datasets.py`).
