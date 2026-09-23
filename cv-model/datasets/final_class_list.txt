@@ -1,0 +1,6 @@
+helmet
+no-helmet
+vest
+no-vest
+person
+machinery
