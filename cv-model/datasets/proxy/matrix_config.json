@@ -1,0 +1,44 @@
+{
+  "cells": [
+    {
+      "time": "midday",
+      "light": "bright",
+      "alt": "low",
+      "occlusion": "none",
+      "violation": "no-helmet",
+      "clip": "datasets/proxy/construction_sample.mp4"
+    },
+    {
+      "time": "midday",
+      "light": "bright",
+      "alt": "low",
+      "occlusion": "none",
+      "violation": "no-vest",
+      "clip": "datasets/proxy/construction_sample.mp4"
+    },
+    {
+      "time": "midday",
+      "light": "bright",
+      "alt": "low",
+      "occlusion": "none",
+      "violation": "machinery-proximity",
+      "clip": "datasets/proxy/construction_sample.mp4"
+    },
+    {
+      "time": "dusk",
+      "light": "backlit",
+      "alt": "high",
+      "occlusion": "partial",
+      "violation": "person-down",
+      "clip": "datasets/proxy/missing_dusk_clip.mp4"
+    },
+    {
+      "time": "morning",
+      "light": "overcast",
+      "alt": "medium",
+      "occlusion": "none",
+      "violation": "restricted-zone-entry",
+      "clip": "datasets/proxy/construction_sample.mp4"
+    }
+  ]
+}

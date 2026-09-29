@@ -21,10 +21,10 @@
 | #1 | DONE | `requirements.txt`, ultralytics 8.4.165 installs | Environment verified 2026-09-29 |
 | #2 | DONE | `notebooks/train_template.ipynb` | Colab scaffold present |
 | #3 | DONE | `datasets/raw/*`, `class_mapping.md`, `final_class_list.txt`, merged 12k+ images | 3 Roboflow datasets merged |
-| #14 | TODO-INDEP | `models/ppe_v1/best.pt` (6.2 MB), `runs/detect/ppe_v1/` | Metrics report pending this session |
+| #14 | DONE | `models/ppe_v1/best.pt`, `reports/week2_ppe_v1_metrics.md` | mAP50=0.816 from real val run |
 | #15 | DONE | `datasets/merged/` 8883 train / 2538 val / 1270 test | Augmented via Roboflow exports |
 | #22 | DONE | `geofence/restricted_zone.py`, 7 pytest cases pass | |
-| #23 | TODO-INDEP | `inference/infer_video.py` written | JSONL + annotated video + mock push pending |
+| #23 | DONE | `reports/sample_violations.jsonl`, `inference/mock_backend.py`, push test in `tests/test_infer_push.py` | Live push to Rachna's API not yet exercised in prod |
 | #32 | TODO-INDEP | `inference/person_down.py` | `full_v1/best.pt` + metrics pending |
 | #39 | TODO-INDEP | — | `full_v2/best.pt` + hard-conditions report pending |
 | #44 | TODO-INDEP | `inference/infer_live.py` | FPS log pending |
@@ -68,6 +68,7 @@ Adapter in `inference/adapters.py` strips uuid/id and maps lat/lon → latitude/
 
 | Commit | Issues |
 |--------|--------|
+| `cd81b55` | #14 ppe_v1 metrics + STATUS |
 | `ff276b6` | #3 #15 dataset merge |
 | `ebbc838` | #1 #2 #3 #14 #22 #23 #32 #39 #44 #49 bulk scaffold |
 

@@ -155,3 +155,4 @@ pytest cv-model/tests/ -v
 - `[#44]` `inference/infer_live.py` written; auto-writes FPS report on exit
 - `[#49]` `geofence/proximity_check.py` + `tests/test_geofence.py` written; **19/19 pytest passing**
 - `[#14]` `ppe_v1/best.pt` validated; metrics in `reports/week2_ppe_v1_metrics.md` (mAP50=0.816)
+- `[#23]` End-to-end video inference → `reports/sample_violations.jsonl` + annotated clip; mock POST tested via pytest
