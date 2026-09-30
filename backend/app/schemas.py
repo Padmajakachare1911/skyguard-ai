@@ -29,3 +29,9 @@ class ViolationCreate(BaseModel):
     longitude: float
     timestamp: datetime
     image_url: str
+
+class Telemetry(BaseModel):
+    latitude: float
+    longitude: float
+    altitude: float
+    flight_mode: str

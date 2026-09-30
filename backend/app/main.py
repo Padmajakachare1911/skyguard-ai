@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers.violations import router as violations_router
+from app.routers.telemetry import router as telemetry_router
 from app.database import engine, Base
 from app import models
 
@@ -23,6 +24,7 @@ app.add_middleware(
 Base.metadata.create_all(bind=engine)
 
 app.include_router(violations_router)
+app.include_router(telemetry_router)
 
 
 @app.get("/")

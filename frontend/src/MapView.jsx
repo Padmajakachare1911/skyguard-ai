@@ -1,9 +1,36 @@
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import { useEffect, useState } from 'react'
+import axios from 'axios'
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup
+} from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 
-const dronePosition = [19.033, 73.0297]
-
 function MapView() {
+  const [telemetry, setTelemetry] = useState(null)
+
+  useEffect(() => {
+    axios
+      .get('http://127.0.0.1:8000/telemetry')
+      .then((response) => {
+        setTelemetry(response.data)
+      })
+      .catch((error) => {
+        console.error('Error fetching telemetry:', error)
+      })
+  }, [])
+
+  if (!telemetry) {
+    return <div>Loading drone telemetry...</div>
+  }
+
+  const dronePosition = [
+    telemetry.latitude,
+    telemetry.longitude
+  ]
+
   return (
     <MapContainer
       center={dronePosition}
@@ -19,7 +46,13 @@ function MapView() {
         <Popup>
           <strong>SkyGuard AI Drone</strong>
           <br />
-          Test drone position
+          Latitude: {telemetry.latitude.toFixed(6)}
+          <br />
+          Longitude: {telemetry.longitude.toFixed(6)}
+          <br />
+          Altitude: {telemetry.altitude.toFixed(1)} m
+          <br />
+          Flight Mode: {telemetry.flight_mode}
         </Popup>
       </Marker>
     </MapContainer>
