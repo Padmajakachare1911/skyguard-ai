@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import './App.css'
+import MapView from './MapView'
 
 function App() {
   const [activeTab, setActiveTab] = useState('Dashboard')
@@ -194,21 +195,49 @@ const [wsStatus, setWsStatus] = useState('Connecting')
                   <span className="badge">LIVE</span>
                 </div>
 
-                <div className="map">
-                  <div className="map-grid"></div>
+                <MapView />
+                {/* Map + Risk */}
+<section className="middle-grid">
 
-                  <div className="map-zone zone-a">ZONE A</div>
-                  <div className="map-zone zone-b">ZONE B</div>
-                  <div className="map-zone zone-c">ZONE C</div>
+  <div className="panel map-panel">
+    <div className="panel-header">
+      <div>
+        <h2>Live Monitoring Map</h2>
+        <p>Real-time drone position</p>
+      </div>
+      <span className="badge">LIVE</span>
+    </div>
 
-                  <div className="drone">
-                    🚁
-                  </div>
+    <MapView />
+  </div>
 
-                  <div className="map-label">
-                    Drone Position
-                  </div>
-                </div>
+  <div className="panel risk-panel">
+    <div className="panel-header">
+      <div>
+        <h2>Risk Score</h2>
+        <p>Current site safety level</p>
+      </div>
+    </div>
+
+    <div className="risk-circle">
+      <div>
+        <strong>62</strong>
+        <span>/ 100</span>
+      </div>
+    </div>
+
+    <div className="risk-level">
+      <span></span>
+      Medium Risk
+    </div>
+
+    <p className="risk-description">
+      Several safety violations have been detected.
+      Immediate attention is recommended.
+    </p>
+  </div>
+
+</section>
               </div>
 
               <div className="panel risk-panel">
