@@ -1,30 +1,62 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import axios from 'axios'
 import './App.css'
 
 function App() {
   const [activeTab, setActiveTab] = useState('Dashboard')
+const [violations, setViolations] = useState([])
+const [apiError, setApiError] = useState('')
+const [wsStatus, setWsStatus] = useState('Connecting')
 
-  const violations = [
-    {
-      type: 'No PPE Detected',
-      location: 'Zone A',
-      time: '10:42 AM',
-      severity: 'High',
-    },
-    {
-      type: 'Restricted Zone Entry',
-      location: 'Zone B',
-      time: '10:38 AM',
-      severity: 'Medium',
-    },
-    {
-      type: 'Unsafe Proximity',
-      location: 'Zone C',
-      time: '10:31 AM',
-      severity: 'High',
-    },
-  ]
+  useEffect(() => {
+  // Load existing violations from the backend
+  axios
+    .get('http://127.0.0.1:8000/violations')
+    .then((response) => {
+      setViolations(response.data)
+      setApiError('')
+    })
+    .catch((error) => {
+      console.error('Error fetching violations:', error)
+      setApiError('Unable to connect to the backend server.')
+    })
 
+  // Connect to the live WebSocket
+  const socket = new WebSocket(
+    'ws://127.0.0.1:8000/ws/violations'
+  )
+
+  socket.onopen = () => {
+    console.log('WebSocket connected')
+    setWsStatus('Connected')
+  }
+
+  socket.onmessage = (event) => {
+    const newViolation = JSON.parse(event.data)
+
+    console.log('New live violation:', newViolation)
+
+    setViolations((currentViolations) => [
+      ...currentViolations,
+      newViolation
+    ])
+  }
+
+  socket.onerror = (error) => {
+    console.error('WebSocket error:', error)
+    setWsStatus('Disconnected')
+  }
+
+  socket.onclose = () => {
+    console.log('WebSocket disconnected')
+    setWsStatus('Disconnected')
+  }
+
+  // Close WebSocket when component is removed
+  return () => {
+    socket.close()
+  }
+}, [])
   return (
     <div className="dashboard">
 
@@ -65,29 +97,50 @@ function App() {
         </nav>
 
         <div className="system-status">
-          <div className="status-dot"></div>
-          <div>
-            <strong>System Online</strong>
-            <small>All systems operational</small>
-          </div>
-        </div>
+  <div className="status-dot"></div>
+  <div>
+    <strong>
+      {wsStatus === 'Connected' ? 'System Online' : 'System Warning'}
+    </strong>
+
+    <small>
+      {wsStatus === 'Connected'
+        ? 'All systems operational'
+        : 'Live connection unavailable'}
+    </small>
+  </div>
+</div>
       </aside>
 
       {/* Main content */}
       <main className="main-content">
 
         {/* Header */}
-        <header className="topbar">
-          <div>
-            <h1>{activeTab}</h1>
-            <p>AI-powered workplace safety monitoring</p>
-          </div>
+       <header className="topbar">
+  <div>
+    <h1>{activeTab}</h1>
+    <p>AI-powered workplace safety monitoring</p>
+  </div>
 
-          <div className="top-status">
-            <span className="live-dot"></span>
-            LIVE MONITORING
-          </div>
-        </header>
+  <div className="top-status">
+    <span className="live-dot"></span>
+    LIVE MONITORING
+  </div>
+</header>
+
+{/* Connection status messages */}
+
+{apiError && (
+  <div className="error-message">
+    ⚠️ {apiError}
+  </div>
+)}
+
+{wsStatus === 'Disconnected' && (
+  <div className="error-message">
+    ⚠️ Live violation feed disconnected.
+  </div>
+)}
 
         {/* Dashboard */}
         {activeTab === 'Dashboard' && (
@@ -210,19 +263,21 @@ function App() {
                     <div className="violation-info">
                       <strong>{violation.type}</strong>
                       <span>
-                        {violation.location} • {violation.time}
+                         Lat: {violation.latitude.toFixed(4)} •
+  Lon: {violation.longitude.toFixed(4)} •
+  {new Date(violation.timestamp).toLocaleTimeString()}
                       </span>
                     </div>
 
                     <span
-                      className={
-                        violation.severity === 'High'
-                          ? 'severity high'
-                          : 'severity medium'
-                      }
-                    >
-                      {violation.severity}
-                    </span>
+  className={
+    violation.confidence >= 0.8
+      ? 'severity high'
+      : 'severity medium'
+  }
+>
+  {violation.confidence >= 0.8 ? 'High' : 'Medium'}
+</span>
 
                   </div>
                 ))}
@@ -234,18 +289,54 @@ function App() {
         )}
 
         {/* Violations page */}
-        {activeTab === 'Violations' && (
-          <section className="panel page-panel">
-            <h2>Violation Management</h2>
-            <p>
-              All detected safety violations will appear here.
-            </p>
+        {/* Violations page */}
+{activeTab === 'Violations' && (
+  <section className="panel page-panel">
+    <h2>Violation Management</h2>
 
-            <div className="empty-message">
-              Violation records will be connected to the FastAPI backend next.
+    <p>
+      All detected safety violations from the SkyGuard AI system.
+    </p>
+
+    {violations.length === 0 ? (
+      <div className="empty-message">
+        No violations recorded yet.
+      </div>
+    ) : (
+      <div className="violation-list">
+
+        {violations.map((violation) => (
+          <div className="violation-row" key={violation.id}>
+
+            <div className="violation-icon">
+              ⚠
             </div>
-          </section>
-        )}
+
+            <div className="violation-info">
+              <strong>{violation.type}</strong>
+
+              <span>
+                Confidence: {(violation.confidence * 100).toFixed(0)}%
+                {' • '}
+                Location: {violation.latitude}, {violation.longitude}
+              </span>
+
+              <span>
+                {new Date(violation.timestamp).toLocaleString()}
+              </span>
+            </div>
+
+            <span className="severity high">
+              DETECTED
+            </span>
+
+          </div>
+        ))}
+
+      </div>
+    )}
+  </section>
+)}
 
         {/* Reports page */}
         {activeTab === 'Reports' && (
