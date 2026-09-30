@@ -12,14 +12,26 @@ function MapView() {
   const [telemetry, setTelemetry] = useState(null)
 
   useEffect(() => {
-    axios
-      .get('http://127.0.0.1:8000/telemetry')
-      .then((response) => {
-        setTelemetry(response.data)
-      })
-      .catch((error) => {
-        console.error('Error fetching telemetry:', error)
-      })
+    const fetchTelemetry = () => {
+      axios
+        .get('http://127.0.0.1:8000/telemetry')
+        .then((response) => {
+          setTelemetry(response.data)
+        })
+        .catch((error) => {
+          console.error('Error fetching telemetry:', error)
+        })
+    }
+
+    // Fetch immediately
+    fetchTelemetry()
+
+    // Continue fetching every second
+    const interval = setInterval(fetchTelemetry, 1000)
+
+    return () => {
+      clearInterval(interval)
+    }
   }, [])
 
   if (!telemetry) {
@@ -38,7 +50,7 @@ function MapView() {
       style={{ height: '400px', width: '100%' }}
     >
       <TileLayer
-        attribution='&copy; OpenStreetMap contributors'
+        attribution="&copy; OpenStreetMap contributors"
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
