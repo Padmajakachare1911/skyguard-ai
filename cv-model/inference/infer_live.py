@@ -51,13 +51,16 @@ def run_live(
     camera_index: int = 0,
     output_jsonl: str = "cv-model/reports/live_violations.jsonl",
     display: bool = True,
+    max_seconds: float | None = None,
+    source: str | int | None = None,
 ) -> None:
     """
     Run full violation-detection pipeline on a live camera feed.
 
     Args:
         model_path:   Path to YOLO .pt weights.
-        camera_index: cv2.VideoCapture source (0 = default webcam).
+        camera_index: cv2.VideoCapture source (0 = default webcam) when source is None.
+        source:       Optional path to a video file (proxy FPS run when no webcam).
         output_jsonl: Path to write violation events.
         display:      If True, show annotated video in a window.
     """
@@ -65,11 +68,14 @@ def run_live(
         raise RuntimeError("ultralytics is not installed. Run: pip install ultralytics")
 
     model = YOLO(model_path)
-    cap   = cv2.VideoCapture(camera_index)
+    capture_source = source if source is not None else camera_index
+    cap = cv2.VideoCapture(capture_source)
 
     if not cap.isOpened():
-        raise RuntimeError(f"Cannot open camera index {camera_index}. "
-                           "Try a different --camera value or check camera permissions.")
+        raise RuntimeError(
+            f"Cannot open video source {capture_source!r}. "
+            "Try --camera, --source path/to/video.mp4, or check permissions."
+        )
 
     Path(output_jsonl).parent.mkdir(parents=True, exist_ok=True)
 
@@ -78,7 +84,8 @@ def run_live(
     fps_history  = []
     start_time   = time.time()
 
-    print(f"[infer_live] Camera {camera_index} opened. Press 'q' to quit.")
+    src_label = str(capture_source)
+    print(f"[infer_live] Source {src_label} opened. Press 'q' to quit.")
 
     with open(output_jsonl, "w") as jsonl_file:
         while True:
@@ -161,6 +168,9 @@ def run_live(
                     break
 
             frame_count += 1
+            if max_seconds and (time.time() - start_time) >= max_seconds:
+                print(f"[infer_live] max_seconds={max_seconds} reached — stopping.")
+                break
 
     cap.release()
     if display:
@@ -181,8 +191,16 @@ def run_live(
 
     # Write FPS summary to reports — Week 6 deliverable
     fps_report_path = Path(output_jsonl).parent / "week6_live_fps_log.md"
-    _write_fps_report(fps_report_path, frame_count, total_elapsed, avg_fps, min_fps, max_fps,
-                      model_path, camera_index)
+    _write_fps_report(
+        fps_report_path,
+        frame_count,
+        total_elapsed,
+        avg_fps,
+        min_fps,
+        max_fps,
+        model_path,
+        src_label,
+    )
 
 
 def _write_fps_report(
@@ -193,23 +211,24 @@ def _write_fps_report(
     lo: float,
     hi: float,
     model_path: str,
-    camera: int,
+    source_label: str,
 ) -> None:
     """Write Week 6 FPS log report."""
     import datetime
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write(f"# Week 6 — Live Camera FPS Log\n\n")
         f.write(f"**Date:** {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}\n\n")
         f.write(f"| Parameter | Value |\n|---|---|\n")
         f.write(f"| Model | `{model_path}` |\n")
-        f.write(f"| Camera index | {camera} |\n")
+        f.write(f"| Source | `{source_label}` |\n")
         f.write(f"| Frames processed | {frames} |\n")
         f.write(f"| Total runtime (s) | {runtime:.1f} |\n")
         f.write(f"| Average FPS | {avg:.2f} |\n")
         f.write(f"| Min FPS | {lo:.2f} |\n")
         f.write(f"| Max FPS | {hi:.2f} |\n\n")
-        f.write(f"**Adequate for real-time use (≥ 15 FPS):** {'Yes' if avg >= 15 else 'No — see mitigation options'}\n\n")
+        ok = "Yes" if avg >= 15 else "No - see mitigation options"
+        f.write(f"**Adequate for real-time use (>= 15 FPS):** {ok}\n\n")
         f.write("## Mitigation if FPS is insufficient\n\n")
         f.write("1. Lower `imgsz` to 320\n")
         f.write("2. Add frame-skipping (process every 2nd frame)\n")
@@ -225,6 +244,12 @@ if __name__ == "__main__":
     ap.add_argument("--output", default="cv-model/reports/live_violations.jsonl",
                     help="JSONL output path for violation events")
     ap.add_argument("--no-display", action="store_true", help="Suppress video window (headless)")
+    ap.add_argument("--max-seconds", type=float, default=None, help="Stop after N seconds (headless CI)")
+    ap.add_argument(
+        "--source",
+        default=None,
+        help="Video file path (proxy live FPS when no webcam); overrides --camera",
+    )
     args = ap.parse_args()
 
     run_live(
@@ -232,4 +257,6 @@ if __name__ == "__main__":
         camera_index = args.camera,
         output_jsonl = args.output,
         display      = not args.no_display,
+        max_seconds  = args.max_seconds,
+        source       = args.source,
     )

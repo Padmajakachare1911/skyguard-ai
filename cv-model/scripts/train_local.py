@@ -17,27 +17,41 @@ import yaml
 
 CV_MODEL = Path(__file__).resolve().parent.parent
 
+# Compressed timeline: 40 epochs, patience=10 (see STATUS.md assumptions).
 PHASES = {
     "ppe_v1": {
         "data": CV_MODEL / "datasets" / "merged_ppe_v1" / "data.yaml",
         "model": "yolov8n.pt",
-        "epochs": 100,
+        "epochs": 40,
         "name": "ppe_v1",
         "expected_classes": {"helmet", "no-helmet", "vest", "no-vest"},
+        "train_kwargs": {},
     },
     "full_v1": {
         "data": CV_MODEL / "datasets" / "merged" / "data.yaml",
         "model": str(CV_MODEL / "models" / "ppe_v1" / "best.pt"),
-        "epochs": 80,
+        "epochs": 40,
         "name": "full_v1",
         "expected_classes": {"helmet", "no-helmet", "vest", "no-vest", "person", "machinery"},
+        "train_kwargs": {},
     },
     "full_v2": {
         "data": CV_MODEL / "datasets" / "merged" / "data.yaml",
         "model": str(CV_MODEL / "models" / "full_v1" / "best.pt"),
-        "epochs": 60,
+        "epochs": 40,
         "name": "full_v2",
         "expected_classes": {"helmet", "no-helmet", "vest", "no-vest", "person", "machinery"},
+        "train_kwargs": {
+            "hsv_h": 0.02,
+            "hsv_s": 0.9,
+            "hsv_v": 0.6,
+            "degrees": 5.0,
+            "translate": 0.1,
+            "scale": 0.6,
+            "mosaic": 1.0,
+            "erasing": 0.5,
+            "mixup": 0.1,
+        },
     },
 }
 
@@ -60,7 +74,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--phase", choices=PHASES.keys(), required=True)
     parser.add_argument("--imgsz", type=int, default=640)
-    parser.add_argument("--batch", type=int, default=16)
+    parser.add_argument("--batch", type=int, default=8, help="Default 8 for 4GB GPU / Windows paging")
+    parser.add_argument("--workers", type=int, default=0, help="DataLoader workers (0 avoids spawn OOM on Windows)")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from runs/detect/<phase>/weights/last.pt if present",
+    )
     args = parser.parse_args()
 
     cfg = PHASES[args.phase]
@@ -75,8 +95,15 @@ def main() -> None:
 
     from ultralytics import YOLO
 
-    model = YOLO(cfg["model"])
+    weights = CV_MODEL / "runs" / "detect" / cfg["name"] / "weights" / "last.pt"
+    init = str(weights) if args.resume and weights.exists() else cfg["model"]
+    if args.resume and weights.exists():
+        print(f"[resume] Continuing from {weights}")
+
+    model = YOLO(init)
+    train_kw = dict(cfg.get("train_kwargs", {}))
     results = model.train(
+        resume=args.resume and weights.exists(),
         data=str(data_yaml),
         epochs=cfg["epochs"],
         imgsz=args.imgsz,
@@ -84,6 +111,10 @@ def main() -> None:
         name=cfg["name"],
         project=str(CV_MODEL / "runs" / "detect"),
         exist_ok=True,
+        patience=10,
+        device=0,
+        workers=args.workers,
+        **train_kw,
     )
 
     best = Path(results.save_dir) / "weights" / "best.pt"

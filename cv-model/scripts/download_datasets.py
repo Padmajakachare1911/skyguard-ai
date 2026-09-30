@@ -46,8 +46,8 @@ def load_api_key() -> str:
 DATASETS = [
     # Dataset 1 — Hard Hat Workers (joseph-nelson)
     # 7,035 images | Classes (3): head, helmet, person
-    # v2 has helmet/head/person; v14 export only exposes class "head" in data.yaml
-    ("joseph-nelson", "hard-hat-workers", 2, "hard-hat-workers"),
+    # version 14 is the latest verified version
+    ("joseph-nelson", "hard-hat-workers", 14, "hard-hat-workers"),
 
     # Dataset 2 — Construction Site Safety (roboflow-universe-projects)
     # 717 images | Classes (25): Hardhat, NO-Hardhat, Safety Vest, NO-Safety Vest,
@@ -62,7 +62,69 @@ DATASETS = [
 
 RAW_DIR = Path(__file__).resolve().parent.parent / "datasets" / "raw"
 
-# Class remapping is done by name in scripts/merge_datasets.py (not here).
+# ---------------------------------------------------------------------------
+# Class remap — verified class names from each dataset's Roboflow page
+# Locked IDs: 0=helmet  1=no-helmet  2=vest  3=no-vest  4=person  5=machinery
+# -1 = skip (class not needed in final dataset)
+# ---------------------------------------------------------------------------
+DATASET_REMAPS = {
+    "hard-hat-workers": {
+        # Verified classes: 0=head  1=helmet  2=person
+        # 'head' = bare head (no helmet) → conservative: map to no-helmet
+        0: 1,   # head    → no-helmet
+        1: 0,   # helmet  → helmet
+        2: 4,   # person  → person
+    },
+    "construction-site-safety": {
+        # Verified 25 classes (positional order from dataset page):
+        # 0=truck  1=bus  2=Mask  3=vehicle  4=van  5=fire hydrant  6=SUV
+        # 7=Person  8=Excavator  9=Hardhat  10=sedan  11=trailer  12=Ladder
+        # 13=Safety Vest  14=dump truck  15=Gloves  16=machinery  17=mini-van
+        # 18=NO-Hardhat  19=NO-Mask  20=NO-Safety Vest  21=Safety Cone
+        # 22=semi  23=truck and trailer  24=wheel loader
+        0:  5,   # truck           → machinery
+        1:  5,   # bus             → machinery
+        2:  -1,  # Mask            → skip
+        3:  5,   # vehicle         → machinery
+        4:  5,   # van             → machinery
+        5:  -1,  # fire hydrant    → skip
+        6:  5,   # SUV             → machinery
+        7:  4,   # Person          → person
+        8:  5,   # Excavator       → machinery
+        9:  0,   # Hardhat         → helmet
+        10: 5,   # sedan           → machinery
+        11: 5,   # trailer         → machinery
+        12: -1,  # Ladder          → skip
+        13: 2,   # Safety Vest     → vest
+        14: 5,   # dump truck      → machinery
+        15: -1,  # Gloves          → skip
+        16: 5,   # machinery       → machinery
+        17: 5,   # mini-van        → machinery
+        18: 1,   # NO-Hardhat      → no-helmet
+        19: -1,  # NO-Mask         → skip
+        20: 3,   # NO-Safety Vest  → no-vest
+        21: -1,  # Safety Cone     → skip
+        22: 5,   # semi            → machinery
+        23: 5,   # truck+trailer   → machinery
+        24: 5,   # wheel loader    → machinery
+    },
+    "ppe-detection": {
+        # Verified 10 classes:
+        # 0=helmet  1=vest  2=goggles  3=boots  4=gloves
+        # 5=no-boots  6=no-gloves  7=no-goggles  8=no-helmet  9=no-vest
+        0: 0,   # helmet     → helmet
+        1: 2,   # vest       → vest
+        2: -1,  # goggles    → skip
+        3: -1,  # boots      → skip
+        4: -1,  # gloves     → skip
+        5: -1,  # no-boots   → skip
+        6: -1,  # no-gloves  → skip
+        7: -1,  # no-goggles → skip
+        8: 1,   # no-helmet  → no-helmet
+        9: 3,   # no-vest    → no-vest
+    },
+}
+
 
 # ---------------------------------------------------------------------------
 # Download + validate helpers
@@ -75,7 +137,7 @@ def download_dataset(rf, workspace: str, project: str, version: int, name: str) 
         print(f"[SKIP] {name} already downloaded at {dst}")
         return dst
 
-    print(f"\n[DOWNLOADING] {workspace}/{project} v{version} -> {dst.name}")
+    print(f"\n[DOWNLOADING] {workspace}/{project} v{version} → {dst.name}")
 
     try:
         ver     = rf.workspace(workspace).project(project).version(version)

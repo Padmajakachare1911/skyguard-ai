@@ -25,9 +25,15 @@ import argparse
 import json
 import uuid
 import datetime
+import time
 from pathlib import Path
 
 import cv2
+
+try:
+    import requests
+except ImportError:
+    requests = None  # type: ignore
 
 # Lazy-import ultralytics so the script can at least be imported in tests
 # even if ultralytics isn't installed in every environment.
@@ -38,6 +44,7 @@ except ImportError:
     _YOLO_AVAILABLE = False
 
 from inference.person_down import detect_person_down, aspect_ratio
+from inference.adapters import to_backend_payload, validate_cv_event
 from geofence.restricted_zone import is_in_restricted_zone, SAMPLE_ZONES
 from geofence.proximity_check import is_machinery_proximity_violation_pixels
 
@@ -120,12 +127,29 @@ def draw_bbox(frame, box, label: str, colour: tuple, conf: float) -> None:
 # Main inference loop
 # ---------------------------------------------------------------------------
 
+def post_violation(url: str, event: dict, timeout: float = 5.0, retries: int = 3) -> bool:
+    """POST one event to backend; never raises — returns True on success."""
+    if requests is None:
+        return False
+    payload = to_backend_payload(event)
+    for attempt in range(retries):
+        try:
+            resp = requests.post(url, json=payload, timeout=timeout)
+            if resp.status_code in (200, 201):
+                return True
+        except requests.RequestException:
+            pass
+        time.sleep(0.5 * (attempt + 1))
+    return False
+
+
 def run_inference(
     video_path: str,
     model_path: str,
     output_jsonl: str,
     annotated_out: str | None = None,
     max_frames: int | None = None,
+    post_url: str | None = None,
 ) -> list[dict]:
     """
     Run full violation-detection pipeline on a video file.
@@ -189,6 +213,8 @@ def run_inference(
                         event = make_violation_event(cls_name, conf, snap)
                         all_events.append(event)
                         jsonl_file.write(json.dumps(event) + "\n")
+                        if post_url:
+                            post_violation(post_url, event)
 
                     # --- Track persons and machinery for heuristics ---
                     if cls_name == "person":
@@ -199,6 +225,8 @@ def run_inference(
                             event = make_violation_event("person-down", conf, snap)
                             all_events.append(event)
                             jsonl_file.write(json.dumps(event) + "\n")
+                            if post_url:
+                                post_violation(post_url, event)
                             if annotated_out and writer:
                                 draw_bbox(frame, bbox, "PERSON-DOWN", VIOLATION_COLOUR, conf)
 
@@ -209,6 +237,8 @@ def run_inference(
                                 event = make_violation_event("restricted-zone-entry", conf, snap)
                                 all_events.append(event)
                                 jsonl_file.write(json.dumps(event) + "\n")
+                                if post_url:
+                                    post_violation(post_url, event)
                                 break  # one event per person per frame
 
                     if cls_name == "machinery":
@@ -225,6 +255,8 @@ def run_inference(
                         event = make_violation_event("machinery-proximity", p_conf, snap)
                         all_events.append(event)
                         jsonl_file.write(json.dumps(event) + "\n")
+                        if post_url:
+                            post_violation(post_url, event)
 
             if writer:
                 writer.write(frame)
@@ -255,6 +287,7 @@ if __name__ == "__main__":
                     help="Output JSONL path for violation events")
     ap.add_argument("--annotated-out", default=None,   help="Path to save annotated video")
     ap.add_argument("--max-frames",    type=int, default=None, help="Stop after N frames")
+    ap.add_argument("--post-url",      default=None, help="Optional POST /violations URL (default off)")
     args = ap.parse_args()
 
     run_inference(
@@ -263,4 +296,5 @@ if __name__ == "__main__":
         output_jsonl  = args.output,
         annotated_out = args.annotated_out,
         max_frames    = args.max_frames,
+        post_url      = args.post_url,
     )

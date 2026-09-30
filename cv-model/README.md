@@ -107,7 +107,7 @@ cv-model/
     restricted_zone.py    # Shapely polygon check for restricted zones
     proximity_check.py    # Haversine GPS + pixel-distance proximity check
   tests/
-    test_geofence.py      # pytest suite (19 tests, all passing)
+    test_geofence.py      # pytest suite (25 tests, all passing)
   reports/                # Metrics, JSONL events, test results
   requirements.txt        # Pinned dependencies
 ```
@@ -118,7 +118,7 @@ cv-model/
 
 ```bash
 pytest cv-model/tests/ -v
-# Expected: 19 passed, 0 failed
+# Expected: 25 passed, 0 failed
 ```
 
 ---
@@ -153,6 +153,10 @@ pytest cv-model/tests/ -v
 - `[#32]` `inference/person_down.py` (aspect-ratio heuristic) written
 - `[#39]` Hard-conditions augmentation baked into `full_v2` training phase in Colab notebook
 - `[#44]` `inference/infer_live.py` written; auto-writes FPS report on exit
-- `[#49]` `geofence/proximity_check.py` + `tests/test_geofence.py` written; **19/19 pytest passing**
+- `[#49]` `geofence/proximity_check.py` + `tests/test_geofence.py` written; **25/25 pytest passing**
 - `[#14]` `ppe_v1/best.pt` validated; metrics in `reports/week2_ppe_v1_metrics.md` (mAP50=0.816)
 - `[#23]` End-to-end video inference → `reports/sample_violations.jsonl` + annotated clip; mock POST tested via pytest
+- `[#32]` `full_v1/best.pt` + `reports/week4_full_v1_metrics.md` (mAP50=0.694)
+- `[#39]` `full_v2/best.pt` + hard-conditions report (`reports/week5_hard_conditions_metrics.md`)
+- `[#44]` Live/proxy FPS log in `reports/week6_live_fps_log.md`
+- `[#55/#58/#61/#66]` Proxy reports: week9 FP/FN, week10 Pi benchmark, week12 matrix (SIMULATED until flight hardware)

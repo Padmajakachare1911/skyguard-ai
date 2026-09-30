@@ -1,6 +1,6 @@
 # SkyGuard AI — CV/ML Track Status
 
-**Last audit:** 2026-09-29  
+**Last audit:** 2026-09-30  
 **Track owner:** Padmaja
 
 ---
@@ -8,9 +8,9 @@
 ## Assumptions
 
 - Training epochs reduced to 40 (from 80–100) with `patience=10` due to compressed 3–4 day timeline; logged per execution prompt §4.
-- No local GPU (CUDA unavailable); all training runs on CPU unless Colab is used manually.
+- Local RTX 3050 GPU (`.venv-gpu`); `full_v1` / `full_v2` trained locally (40 epochs, patience=10).
 - Rachna's backend uses `latitude`/`longitude` (not `lat`/`lon`) and auto-int `id`; CV pipeline emits both field sets plus uuid4 `id` for traceability.
-- Live webcam FPS test (#44) may use `--max-seconds` fallback if no camera is attached in CI/agent environment.
+- Live FPS (#44): `--source datasets/proxy/construction_sample.mp4 --no-display --max-seconds 30` when no webcam.
 
 ---
 
@@ -25,15 +25,15 @@
 | #15 | DONE | `datasets/merged/` 8883 train / 2538 val / 1270 test | Augmented via Roboflow exports |
 | #22 | DONE | `geofence/restricted_zone.py`, 7 pytest cases pass | |
 | #23 | DONE | `reports/sample_violations.jsonl`, `inference/mock_backend.py`, push test in `tests/test_infer_push.py` | Live push to Rachna's API not yet exercised in prod |
-| #32 | TODO-INDEP | `inference/person_down.py` | `full_v1/best.pt` + metrics pending |
-| #39 | TODO-INDEP | — | `full_v2/best.pt` + hard-conditions report pending |
-| #44 | TODO-INDEP | `inference/infer_live.py` | FPS log pending |
-| #49 | DONE | `geofence/proximity_check.py`, `tests/test_geofence.py`, `reports/week7_geofence_test_results.md` | 19/19 pytest pass |
-| #55 | BLOCKED | — | No real flight footage in repo |
-| #58 | BLOCKED | — | No real flight footage + labels |
-| #61 | BLOCKED | — | No Pi 5 + Pixhawk GPS + mounted camera |
-| #65 | BLOCKED | — | Depends on #55/#58 real failure patterns |
-| #66 | BLOCKED | — | No multi-condition real flights |
+| #32 | DONE | `models/full_v1/best.pt`, `inference/person_down.py`, `reports/week4_full_v1_metrics.md` | mAP50=0.694; person-down in live/video pipeline |
+| #39 | DONE | `models/full_v2/best.pt`, `reports/week5_full_v2_metrics.md`, `reports/week5_hard_conditions_metrics.md` | mAP50=0.687; hard/clean proxy eval |
+| #44 | DONE | `inference/infer_live.py`, `reports/week6_live_fps_log.md` | ~32 FPS avg on proxy video (GPU dev machine) |
+| #49 | DONE | `geofence/proximity_check.py`, `tests/test_geofence.py`, `reports/week7_geofence_test_results.md` | 25/25 pytest pass |
+| #55 | PARTIAL-SIM | `inference/eval_footage.py`, `reports/week9_fp_fn_summary.md` | Proxy test-set eval; re-run on `datasets/flight_raw/` |
+| #58 | PARTIAL-SIM | `reports/week9_fp_fn.csv`, `reports/fp_fn_crops/` | Same proxy run; needs real flight labels |
+| #61 | PARTIAL-SIM | `inference/infer_pi.py`, `reports/week10_pi_fps_benchmark.md` | Dev-machine proxy; re-benchmark on Pi 5 + MAVLink |
+| #65 | BLOCKED | `scripts/merge_field_data.py` | No real failure crops yet |
+| #66 | PARTIAL-SIM | `inference/run_matrix.py`, `reports/week12_multi_condition_matrix.md` | Proxy matrix; dusk clip NOT TESTED |
 
 ---
 
@@ -76,8 +76,10 @@ Adapter in `inference/adapters.py` strips uuid/id and maps lat/lon → latitude/
 
 ## Pending Real-Data Re-runs
 
-- [ ] #55/#58: Re-run `inference/eval_footage.py` on footage in `datasets/flight_raw/` when Rashi/Aarthi upload it
+- [x] Proxy #55/#58/#66: `eval_footage`, `run_matrix` on merged test + `construction_sample.mp4` (2026-09-30)
+- [x] Proxy #61: `infer_pi.py` on dev GPU (2026-09-30)
+- [ ] #55/#58: Re-run `eval_footage` on `datasets/flight_raw/` when Rashi/Aarthi upload it
 - [ ] #61: Re-benchmark `infer_pi.py` on Pi 5 with real MAVLink GPS
 - [ ] #65: Retrain `field_v1` on real flight failure crops
-- [ ] #66: Fill matrix cells marked NOT TESTED with real multi-flight data
+- [ ] #66: Replace NOT TESTED matrix cells with real multi-flight clips
 - [ ] #23: Test `--post-url` against Rachna's live backend (core JSONL path is independent)
