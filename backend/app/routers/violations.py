@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.schemas import Violation, ViolationCreate
 from app.database import get_db
 from app import models
+from app.routers.telemetry import find_closest_telemetry
 
 
 router = APIRouter()
@@ -41,11 +42,25 @@ async def create_violation(
     violation: ViolationCreate,
     db: Session = Depends(get_db)
 ):
+    # Find the telemetry point closest to the violation timestamp
+    matched_telemetry = find_closest_telemetry(
+        violation.timestamp
+    )
+
+    # Use synchronized telemetry coordinates if available
+    if matched_telemetry:
+        latitude = matched_telemetry["latitude"]
+        longitude = matched_telemetry["longitude"]
+    else:
+        # Fall back to coordinates sent with the violation
+        latitude = violation.latitude
+        longitude = violation.longitude
+
     db_violation = models.Violation(
         type=violation.type,
         confidence=violation.confidence,
-        latitude=violation.latitude,
-        longitude=violation.longitude,
+        latitude=latitude,
+        longitude=longitude,
         timestamp=violation.timestamp,
         image_url=violation.image_url
     )
