@@ -35,3 +35,4 @@ class Telemetry(BaseModel):
     longitude: float
     altitude: float
     flight_mode: str
+    timestamp: datetime

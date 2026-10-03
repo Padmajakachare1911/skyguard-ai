@@ -1,4 +1,6 @@
 import time
+from datetime import datetime, timezone
+
 import requests
 from pymavlink import mavutil
 
@@ -51,23 +53,35 @@ try:
 
         msg_type = msg.get_type()
 
-        # Flight mode
+        # ====================================================
+        # FLIGHT MODE
+        # ====================================================
+
         if msg_type == "HEARTBEAT":
 
             flight_mode = mavutil.mode_string_v10(msg)
 
-        # GPS position
+        # ====================================================
+        # GPS POSITION
+        # ====================================================
+
         elif msg_type == "GLOBAL_POSITION_INT":
 
             latitude = msg.lat / 1e7
             longitude = msg.lon / 1e7
             altitude = msg.relative_alt / 1000.0
 
+            # Current UTC timestamp
+            timestamp = datetime.now(
+                timezone.utc
+            ).isoformat()
+
             telemetry = {
                 "latitude": latitude,
                 "longitude": longitude,
                 "altitude": altitude,
-                "flight_mode": flight_mode
+                "flight_mode": flight_mode,
+                "timestamp": timestamp
             }
 
             try:
@@ -85,6 +99,7 @@ try:
                     f"Lon: {longitude:.7f} | "
                     f"Alt: {altitude:.2f} m | "
                     f"Mode: {flight_mode} | "
+                    f"Time: {timestamp} | "
                     f"Backend: OK"
                 )
 

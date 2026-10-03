@@ -1,4 +1,7 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter
+
 from app.schemas import Telemetry
 
 router = APIRouter()
@@ -7,7 +10,8 @@ latest_telemetry = {
     "latitude": 19.033,
     "longitude": 73.0297,
     "altitude": 0.0,
-    "flight_mode": "UNKNOWN"
+    "flight_mode": "UNKNOWN",
+    "timestamp": datetime.now(timezone.utc)
 }
 
 
