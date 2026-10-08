@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import axios from 'axios'
 import './App.css'
 import MapView from './MapView'
+import Workers from './Workers'
 
 function App() {
   const [activeTab, setActiveTab] = useState('Dashboard')
@@ -111,6 +112,18 @@ function App() {
             <span>▤</span>
             Reports
           </button>
+
+          <button
+  className={
+    activeTab === 'Workers'
+      ? 'nav-item active'
+      : 'nav-item'
+  }
+  onClick={() => setActiveTab('Workers')}
+>
+  <span>👤</span>
+  Workers
+</button>
 
         </nav>
 
@@ -301,6 +314,7 @@ function App() {
 
                 <div>
                   <h2>Recent Violations</h2>
+
                   <p>
                     Latest AI-detected safety incidents
                   </p>
@@ -343,17 +357,41 @@ function App() {
 
                         <span>
                           Lat:{' '}
-                          {Number(violation.latitude).toFixed(4)}
+                          {Number(
+                            violation.latitude
+                          ).toFixed(4)}
+
                           {' • '}
+
                           Lon:{' '}
-                          {Number(violation.longitude).toFixed(4)}
+                          {Number(
+                            violation.longitude
+                          ).toFixed(4)}
+
                           {' • '}
+
                           {new Date(
                             violation.timestamp
                           ).toLocaleTimeString()}
                         </span>
 
                       </div>
+
+
+                      {/* Snapshot */}
+                      {violation.image_url && (
+                        <img
+                          src={`http://127.0.0.1:8000/snapshots/${violation.image_url}`}
+                          alt="Violation snapshot"
+                          style={{
+                            width: '70px',
+                            height: '50px',
+                            objectFit: 'cover',
+                            borderRadius: '6px',
+                            marginLeft: '12px'
+                          }}
+                        />
+                      )}
 
 
                       <span
@@ -363,9 +401,11 @@ function App() {
                             : 'severity medium'
                         }
                       >
+
                         {violation.confidence >= 0.8
                           ? 'High'
                           : 'Medium'}
+
                       </span>
 
                     </div>
@@ -433,8 +473,11 @@ function App() {
                           violation.confidence * 100
                         ).toFixed(0)}
                         %
+
                         {' • '}
+
                         Location:{' '}
+
                         {violation.latitude},{' '}
                         {violation.longitude}
                       </span>
@@ -447,6 +490,22 @@ function App() {
                       </span>
 
                     </div>
+
+
+                    {/* Snapshot */}
+                    {violation.image_url && (
+                      <img
+                        src={`http://127.0.0.1:8000/snapshots/${violation.image_url}`}
+                        alt="Violation snapshot"
+                        style={{
+                          width: '100px',
+                          height: '70px',
+                          objectFit: 'cover',
+                          borderRadius: '6px',
+                          marginLeft: '12px'
+                        }}
+                      />
+                    )}
 
 
                     <span className="severity high">
@@ -482,13 +541,51 @@ function App() {
             </p>
 
 
-            <button className="report-button">
-              Generate Report
-            </button>
+            <button
+  className="report-button"
+  onClick={async () => {
+    try {
+      const response = await axios.get(
+        'http://127.0.0.1:8000/reports/overall',
+        {
+          responseType: 'blob',
+        }
+      )
+
+      const url = window.URL.createObjectURL(
+        new Blob([response.data], {
+          type: 'application/pdf',
+        })
+      )
+
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute(
+        'download',
+        'SkyGuard_Overall_Safety_Report.pdf'
+      )
+
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Report generation failed:', error)
+      alert('Unable to generate safety report.')
+    }
+  }}
+>
+  Generate Report
+</button>
 
           </section>
 
         )}
+
+        {activeTab === 'Workers' && (
+  <Workers violations={violations} />
+)}
 
       </main>
 

@@ -20,3 +20,15 @@ dist/
 .DS_Store
 .vscode/
 *.log
+
+# Local Python virtual environment
+ai-venv/
+
+# Local database
+backend/skyguard.db
+
+# Generated PDF reports
+backend/reports/
+
+# Generated violation snapshots
+backend/snapshots/

@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.routers.violations import router as violations_router
 from app.routers.telemetry import router as telemetry_router
@@ -8,6 +9,11 @@ from app import models
 
 
 app = FastAPI()
+app.mount(
+    "/snapshots",
+    StaticFiles(directory="snapshots"),
+    name="snapshots"
+)
 
 # Allow React frontend to communicate with FastAPI backend
 app.add_middleware(

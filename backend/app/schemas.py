@@ -14,6 +14,7 @@ ViolationType = Literal[
 
 class Violation(BaseModel):
     id: int
+    person_id: str
     type: ViolationType
     confidence: float
     latitude: float
@@ -23,12 +24,14 @@ class Violation(BaseModel):
 
 
 class ViolationCreate(BaseModel):
+    person_id: str
     type: ViolationType
     confidence: float
     latitude: float
     longitude: float
     timestamp: datetime
     image_url: str
+
 
 class Telemetry(BaseModel):
     latitude: float
