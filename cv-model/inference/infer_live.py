@@ -19,7 +19,13 @@ Week 6 (#44) deliverable.
 import argparse
 import json
 import time
+import sys
 from pathlib import Path
+
+# Ensure cv-model root is in sys.path for absolute imports
+_CV_MODEL_DIR = Path(__file__).resolve().parent.parent
+if str(_CV_MODEL_DIR) not in sys.path:
+    sys.path.insert(0, str(_CV_MODEL_DIR))
 
 import cv2
 

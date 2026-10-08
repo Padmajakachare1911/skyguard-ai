@@ -1,7 +1,8 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import axios from 'axios'
 import './App.css'
 import MapView from './MapView'
+import CameraFeed from './CameraFeed'
 
 // Real model metadata from archive results.csv
 const MODEL_INFO = {
@@ -46,6 +47,7 @@ function App() {
   const [apiError, setApiError]     = useState('')
   const [wsStatus, setWsStatus]     = useState('Connecting')
   const [modelTab, setModelTab]     = useState('overview')
+  const [feedMode, setFeedMode]     = useState('camera')
 
   useEffect(() => {
     axios
@@ -199,12 +201,25 @@ function App() {
               <div className="panel map-panel">
                 <div className="panel-header">
                   <div>
-                    <h2>Live Monitoring Map</h2>
-                    <p>Real-time drone position</p>
+                    <h2>{feedMode === 'camera' ? 'Live Camera Feed' : 'Live Monitoring Map'}</h2>
+                    <p>{feedMode === 'camera' ? 'Real-time laptop camera AI site inspection' : 'Real-time drone position & telemetry'}</p>
                   </div>
-                  <span className="badge">LIVE</span>
+                  <div className="panel-toggle">
+                    <button
+                      className={feedMode === 'camera' ? 'toggle-btn active' : 'toggle-btn'}
+                      onClick={() => setFeedMode('camera')}
+                    >
+                      📹 Live Camera
+                    </button>
+                    <button
+                      className={feedMode === 'map' ? 'toggle-btn active' : 'toggle-btn'}
+                      onClick={() => setFeedMode('map')}
+                    >
+                      🗺️ Drone Map
+                    </button>
+                  </div>
                 </div>
-                <MapView />
+                {feedMode === 'camera' ? <CameraFeed /> : <MapView />}
               </div>
 
               <div className="panel risk-panel">
