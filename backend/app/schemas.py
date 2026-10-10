@@ -7,6 +7,7 @@ ViolationType = Literal[
     "no-helmet",
     "no-vest",
     "restricted-zone",
+    "restricted-zone-entry",
     "machinery-proximity",
     "person-down"
 ]
@@ -14,7 +15,7 @@ ViolationType = Literal[
 
 class Violation(BaseModel):
     id: int
-    type: ViolationType
+    type: str
     confidence: float
     latitude: float
     longitude: float
@@ -23,12 +24,13 @@ class Violation(BaseModel):
 
 
 class ViolationCreate(BaseModel):
-    type: ViolationType
+    type: str
     confidence: float
-    latitude: float
-    longitude: float
+    latitude: float = 19.0330
+    longitude: float = 73.0297
     timestamp: datetime
-    image_url: str
+    image_url: str = "default_snapshot.jpg"
+    person_id: str | None = None
 
 class Telemetry(BaseModel):
     latitude: float

@@ -18,7 +18,11 @@ echo ===================================================================
 echo.
 echo Starting Python detector...
 echo.
-python cv-model\inference\webcam_demo.py
+if exist "venv\Scripts\python.exe" (
+    venv\Scripts\python.exe cv-model\inference\webcam_demo.py
+) else (
+    python cv-model\inference\webcam_demo.py
+)
 echo.
 echo ===================================================================
 echo  Webcam detector session finished cleanly.

@@ -3,6 +3,7 @@ import axios from 'axios'
 import './App.css'
 import MapView from './MapView'
 import CameraFeed from './CameraFeed'
+import { API_BASE_URL, WS_BASE_URL } from './apiConfig'
 
 // Real model metadata from archive results.csv
 const MODEL_INFO = {
@@ -51,7 +52,7 @@ function App() {
 
   useEffect(() => {
     axios
-      .get('http://127.0.0.1:8000/violations')
+      .get(`${API_BASE_URL}/violations`)
       .then((res) => {
         setViolations(res.data)
         setApiError('')
@@ -60,7 +61,7 @@ function App() {
         setApiError('Unable to connect to the backend server.')
       })
 
-    const socket = new WebSocket('ws://127.0.0.1:8000/ws/violations')
+    const socket = new WebSocket(`${WS_BASE_URL}/ws/violations`)
     socket.onopen    = () => setWsStatus('Connected')
     socket.onmessage = (e) => {
       const v = JSON.parse(e.data)

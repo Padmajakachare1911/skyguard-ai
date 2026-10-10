@@ -7,6 +7,7 @@ import {
   Popup
 } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
+import { API_BASE_URL } from './apiConfig'
 
 function MapView() {
   const [telemetry, setTelemetry] = useState(null)
@@ -14,7 +15,7 @@ function MapView() {
   useEffect(() => {
     const fetchTelemetry = () => {
       axios
-        .get('http://127.0.0.1:8000/telemetry')
+        .get(`${API_BASE_URL}/telemetry`)
         .then((response) => {
           setTelemetry(response.data)
         })
