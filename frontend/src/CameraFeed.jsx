@@ -1,12 +1,16 @@
 import { useState, useRef, useEffect } from 'react'
+import axios from 'axios'
+import { API_BASE_URL } from './apiConfig'
 
 export default function CameraFeed() {
   const [streaming, setStreaming] = useState(false)
   const [cameraError, setCameraError] = useState('')
   const [snapshots, setSnapshots] = useState([])
   const [flash, setFlash] = useState(false)
+  const [isAlerting, setIsAlerting] = useState(false)
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
+  const streamRef = useRef(null)
 
   const startCamera = async () => {
     setCameraError('')
@@ -15,25 +19,46 @@ export default function CameraFeed() {
         video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
         audio: false,
       })
+      streamRef.current = stream
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream
-        videoRef.current.play()
-        setStreaming(true)
+        try {
+          await videoRef.current.play()
+        } catch (playErr) {
+          console.warn('Direct play error:', playErr)
+        }
       }
+
+      setStreaming(true)
     } catch (err) {
       console.error('Camera error:', err)
-      setCameraError('Unable to access camera: ' + (err.message || 'Permission denied or in use.'))
+      setCameraError('Unable to access camera: ' + (err.message || 'Permission denied or device in use.'))
     }
   }
 
   const stopCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const tracks = videoRef.current.srcObject.getTracks()
-      tracks.forEach((track) => track.stop())
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+    }
+    if (videoRef.current) {
       videoRef.current.srcObject = null
     }
     setStreaming(false)
   }
+
+  // Backup sync to ensure video plays if ref attaches or re-renders
+  useEffect(() => {
+    if (streaming && streamRef.current && videoRef.current) {
+      if (videoRef.current.srcObject !== streamRef.current) {
+        videoRef.current.srcObject = streamRef.current
+      }
+      videoRef.current.play().catch((err) => {
+        console.warn('Video playback warning:', err)
+      })
+    }
+  }, [streaming])
 
   const captureFrame = () => {
     if (!videoRef.current || !streaming) return
@@ -52,19 +77,60 @@ export default function CameraFeed() {
     ctx.fillStyle = '#00ffcc'
     ctx.font = '14px monospace'
     const timestamp = new Date().toISOString()
-    ctx.fillText(`SKYGUARD AI · ${timestamp} · GPS: 18.5204° N, 73.8567° E`, 16, canvas.height - 13)
+    ctx.fillText(`SKYGUARD AI · ${timestamp} · GPS: 19.0330° N, 73.0297° E`, 16, canvas.height - 13)
 
     const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
-    setSnapshots((prev) => [{ id: Date.now(), url: dataUrl, time: new Date().toLocaleTimeString() }, ...prev.slice(0, 4)])
+    setSnapshots((prev) => [
+      { id: Date.now(), url: dataUrl, time: new Date().toLocaleTimeString() },
+      ...prev.slice(0, 4)
+    ])
 
     // Shutter flash effect
     setFlash(true)
     setTimeout(() => setFlash(false), 300)
   }
 
+  const sendSnapshotAlert = async (snap) => {
+    setIsAlerting(true)
+    try {
+      // 1. Upload snapshot file to backend
+      const fetchRes = await fetch(snap.url)
+      const blob = await fetchRes.blob()
+      const formData = new FormData()
+      formData.append('file', blob, `site_cam_${snap.id}.jpg`)
+
+      let uploadedUrl = 'webcam_capture.jpg'
+      try {
+        const upRes = await axios.post(`${API_BASE_URL}/violations/upload-snapshot`, formData)
+        if (upRes.data && upRes.data.image_url) {
+          uploadedUrl = upRes.data.image_url
+        }
+      } catch (upErr) {
+        console.warn('Upload endpoint error:', upErr)
+      }
+
+      // 2. Dispatch violation to /violations
+      await axios.post(`${API_BASE_URL}/violations`, {
+        type: 'no-helmet',
+        confidence: 0.93,
+        latitude: 19.033,
+        longitude: 73.0297,
+        timestamp: new Date().toISOString(),
+        image_url: uploadedUrl
+      })
+    } catch (err) {
+      console.error('Alert dispatch error:', err)
+    } finally {
+      setIsAlerting(false)
+    }
+  }
+
   useEffect(() => {
     return () => {
-      stopCamera()
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop())
+        streamRef.current = null
+      }
     }
   }, [])
 
@@ -72,6 +138,16 @@ export default function CameraFeed() {
     <div className="camera-feed-container">
       {/* Video Viewport */}
       <div className={`camera-viewport ${flash ? 'camera-flash' : ''}`}>
+        <video
+          ref={videoRef}
+          className="camera-video-elem"
+          playsInline
+          muted
+          autoPlay
+          style={{ display: streaming ? 'block' : 'none' }}
+        />
+        <canvas ref={canvasRef} style={{ display: 'none' }} />
+
         {!streaming ? (
           <div className="camera-placeholder">
             <div className="camera-placeholder-icon">📹</div>
@@ -84,9 +160,6 @@ export default function CameraFeed() {
           </div>
         ) : (
           <>
-            <video ref={videoRef} className="camera-video-elem" playsInline muted />
-            <canvas ref={canvasRef} style={{ display: 'none' }} />
-
             {/* In-feed HUD Overlay */}
             <div className="camera-hud-top">
               <div className="cam-live-indicator">
@@ -129,9 +202,26 @@ export default function CameraFeed() {
               <div key={snap.id} className="snapshot-card">
                 <img src={snap.url} alt="Site capture" />
                 <span>{snap.time}</span>
-                <a href={snap.url} download={`skyguard_site_${snap.id}.jpg`} className="snap-dl-link">
-                  Save
-                </a>
+                <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                  <a href={snap.url} download={`skyguard_site_${snap.id}.jpg`} className="snap-dl-link">
+                    Save
+                  </a>
+                  <button
+                    onClick={() => sendSnapshotAlert(snap)}
+                    disabled={isAlerting}
+                    style={{
+                      background: '#ef4444',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      fontSize: '10px',
+                      padding: '2px 6px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Send Alert
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -140,3 +230,4 @@ export default function CameraFeed() {
     </div>
   )
 }
+
