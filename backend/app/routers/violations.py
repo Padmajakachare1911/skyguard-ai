@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+import shutil
+from datetime import datetime, timezone
+from pathlib import Path
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, File, UploadFile
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 
@@ -75,6 +78,25 @@ async def create_violation(
     await manager.broadcast(violation_data)
 
     return db_violation
+
+
+UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+
+@router.post("/violations/upload-snapshot")
+async def upload_snapshot(file: UploadFile = File(...)):
+    """Uploads a snapshot image and returns the accessible URL."""
+    timestamp_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    clean_filename = f"{timestamp_str}_{file.filename}"
+    file_path = UPLOAD_DIR / clean_filename
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    return {
+        "status": "success",
+        "filename": clean_filename,
+        "image_url": f"/uploads/{clean_filename}"
+    }
 
 
 @router.websocket("/ws/violations")

@@ -28,6 +28,13 @@ if str(_CV_MODEL_DIR) not in sys.path:
     sys.path.insert(0, str(_CV_MODEL_DIR))
 
 import cv2
+import threading
+
+try:
+    import requests
+    _REQUESTS_AVAILABLE = True
+except ImportError:
+    _REQUESTS_AVAILABLE = False
 
 try:
     from ultralytics import YOLO
@@ -47,9 +54,33 @@ from inference.infer_video import (
     GPS_STUB_LAT,
     GPS_STUB_LON,
 )
+from inference.adapters import to_backend_payload
 from inference.person_down import detect_person_down
 from geofence.restricted_zone import is_in_restricted_zone, SAMPLE_ZONES
 from geofence.proximity_check import is_machinery_proximity_violation_pixels
+
+_LAST_TRIGGER_TIMES: dict[str, float] = {}
+TRIGGER_COOLDOWN_SECONDS = 3.0
+
+
+def _dispatch_violation_async(post_url: str | None, event: dict) -> None:
+    """Dispatches violation event asynchronously with rate limiting so camera FPS stays high."""
+    if not post_url or not _REQUESTS_AVAILABLE:
+        return
+    v_type = event.get("type", "unknown")
+    now = time.time()
+    if now - _LAST_TRIGGER_TIMES.get(v_type, 0.0) < TRIGGER_COOLDOWN_SECONDS:
+        return
+    _LAST_TRIGGER_TIMES[v_type] = now
+
+    def _worker():
+        try:
+            payload = to_backend_payload(event)
+            requests.post(post_url, json=payload, timeout=1.0)
+        except Exception:
+            pass
+
+    threading.Thread(target=_worker, daemon=True).start()
 
 
 def run_live(
@@ -59,6 +90,7 @@ def run_live(
     display: bool = True,
     max_seconds: float | None = None,
     source: str | int | None = None,
+    post_url: str | None = None,
 ) -> None:
     """
     Run full violation-detection pipeline on a live camera feed.
@@ -69,6 +101,7 @@ def run_live(
         source:       Optional path to a video file (proxy FPS run when no webcam).
         output_jsonl: Path to write violation events.
         display:      If True, show annotated video in a window.
+        post_url:     Optional HTTP endpoint to POST violations (e.g. http://IP:8000/violations).
     """
     if not _YOLO_AVAILABLE:
         raise RuntimeError("ultralytics is not installed. Run: pip install ultralytics")
@@ -127,6 +160,7 @@ def run_live(
                         event = make_violation_event(cls_name, conf, snap)
                         jsonl_file.write(json.dumps(event) + "\n")
                         total_events += 1
+                        _dispatch_violation_async(post_url, event)
 
                     if cls_name == "person":
                         persons.append((bbox, conf))
@@ -135,6 +169,7 @@ def run_live(
                             event = make_violation_event("person-down", conf, snap)
                             jsonl_file.write(json.dumps(event) + "\n")
                             total_events += 1
+                            _dispatch_violation_async(post_url, event)
                             if display:
                                 draw_bbox(frame, bbox, "PERSON-DOWN", (0, 0, 255), conf)
 
@@ -144,6 +179,7 @@ def run_live(
                                 event = make_violation_event("restricted-zone-entry", conf, snap)
                                 jsonl_file.write(json.dumps(event) + "\n")
                                 total_events += 1
+                                _dispatch_violation_async(post_url, event)
                                 break
 
                     if cls_name == "machinery":
@@ -158,6 +194,7 @@ def run_live(
                         event = make_violation_event("machinery-proximity", p_conf, snap)
                         jsonl_file.write(json.dumps(event) + "\n")
                         total_events += 1
+                        _dispatch_violation_async(post_url, event)
 
             # FPS calculation
             elapsed = time.time() - t_frame
@@ -256,6 +293,11 @@ if __name__ == "__main__":
         default=None,
         help="Video file path (proxy live FPS when no webcam); overrides --camera",
     )
+    ap.add_argument(
+        "--post-url",
+        default=None,
+        help="URL to POST violations in real-time (e.g. http://10.241.28.122:8000/violations)",
+    )
     args = ap.parse_args()
 
     run_live(
@@ -265,4 +307,5 @@ if __name__ == "__main__":
         display      = not args.no_display,
         max_seconds  = args.max_seconds,
         source       = args.source,
+        post_url     = args.post_url,
     )

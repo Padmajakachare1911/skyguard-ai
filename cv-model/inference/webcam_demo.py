@@ -28,6 +28,14 @@ for p in (str(CV_MODEL_DIR), str(PROJECT_ROOT)):
 
 import cv2
 import numpy as np
+import datetime
+import threading
+
+try:
+    import requests
+    _REQUESTS_AVAILABLE = True
+except ImportError:
+    _REQUESTS_AVAILABLE = False
 
 try:
     import winsound
@@ -40,6 +48,36 @@ try:
 except ImportError:
     print("[ERROR] ultralytics is not installed. Run: pip install ultralytics")
     sys.exit(1)
+
+
+# Dashboard connection & rate-limiting cooldown
+BACKEND_API = os.environ.get("SKYGUARD_BACKEND_URL", "http://127.0.0.1:8000/violations")
+_LAST_TRIGGER_TIMES = {}
+TRIGGER_COOLDOWN_SECONDS = 3.0
+
+
+def send_dashboard_alert_async(violation_type: str, confidence: float, snapshot_path: str = ""):
+    """Dispatches a violation alert asynchronously without blocking the camera loop."""
+    if not _REQUESTS_AVAILABLE:
+        return
+
+    def _worker():
+        payload = {
+            "person_id": "WORKER-LIVE",
+            "type": violation_type,
+            "confidence": round(float(confidence), 2),
+            "latitude": 19.0332,
+            "longitude": 73.0299,
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "image_url": snapshot_path or f"{violation_type}.jpg"
+        }
+        try:
+            requests.post(BACKEND_API, json=payload, timeout=1.0)
+            print(f"  [DASHBOARD ALERT] Dispatched '{violation_type}' ({int(confidence * 100)}%) to {BACKEND_API}")
+        except Exception:
+            pass
+
+    threading.Thread(target=_worker, daemon=True).start()
 
 
 # Models available for cycling
@@ -254,8 +292,18 @@ def main():
                     detections_list.append(f"{cls_name} ({int(conf * 100)}%)")
 
                     lower_name = cls_name.lower()
-                    if any(k in lower_name for k in ["no-helmet", "no-hardhat", "no-vest", "no-safety-vest"]):
+                    if any(k in lower_name for k in ["no-helmet", "no-hardhat"]):
                         has_violation = True
+                        now_t = time.time()
+                        if now_t - _LAST_TRIGGER_TIMES.get("no-helmet", 0) > TRIGGER_COOLDOWN_SECONDS:
+                            _LAST_TRIGGER_TIMES["no-helmet"] = now_t
+                            send_dashboard_alert_async("no-helmet", conf)
+                    elif any(k in lower_name for k in ["no-vest", "no-safety-vest"]):
+                        has_violation = True
+                        now_t = time.time()
+                        if now_t - _LAST_TRIGGER_TIMES.get("no-vest", 0) > TRIGGER_COOLDOWN_SECONDS:
+                            _LAST_TRIGGER_TIMES["no-vest"] = now_t
+                            send_dashboard_alert_async("no-vest", conf)
                     elif any(k in lower_name for k in ["hardhat", "helmet", "safety-vest", "vest"]):
                         has_compliant = True
 
