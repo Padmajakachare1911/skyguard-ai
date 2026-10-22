@@ -5,6 +5,27 @@
 
 ---
 
+## Workflow
+
+1. **Roboflow:** upload PPE images, annotate helmets/vests, create dataset versions.
+2. **Train** with Ultralytics (Colab/local) on the Roboflow export, then export the weights (`best.pt`, or NCNN/ONNX for faster Raspberry Pi 4 CPU inference) and copy them to the Pi.
+3. **Raspberry Pi 4:** run local YOLO inference on the CSI camera feed. No cloud request for any frame.
+4. **Violation detected:** the Pi sends ONLY the violation snapshot image and its metadata to the laptop over Wi-Fi (`inference/laptop_client.py`).
+5. **Laptop FastAPI backend:** saves the evidence in `backend/snapshots`, stores the violation in the DB, and broadcasts it on `/ws/violations`.
+6. **Dashboard:** shows the alert with timestamp, violation type, and GPS coordinates if available.
+
+### Run on Pi
+
+```bash
+python -m inference.infer_pi --source csi --model weights/best.pt --gps stub --send --backend http://<LAPTOP_IP>:8000
+```
+
+- `--backend` defaults to the `SKYGUARD_BACKEND` env var. `--gps mavlink` uses the Pixhawk fix; with `stub`/no fix, `0.0` is sent and the backend uses telemetry when available.
+- Per violation: JPEG is saved to `reports/pi_snapshots/`, uploaded to `POST /violations/upload-snapshot`, then metadata is POSTed to `POST /violations` with `image_url` set to the returned bare filename. Same-type violations are throttled (5 s cooldown); unreachable-laptop sends are queued and retried, never blocking inference.
+- Laptop checklist: `run_backend.bat` binds `0.0.0.0:8000` (CORS open); allow inbound TCP 8000 in Windows Firewall; Pi and laptop on the same Wi-Fi.
+
+---
+
 ## Quick Start — Run Inference
 
 ### On a recorded video file
@@ -78,7 +99,7 @@ Every event emitted by the inference pipeline matches this shape:
 }
 ```
 
-> `lat`/`lon` are stubbed at `0.0` until Rashi's MAVLink GPS feed is wired in (Week 10).  
+> `lat`/`lon` come from the GPS provider (`--gps stub` gives `0.0`; `--gps mavlink` uses the live fix).  
 > `latitude`/`longitude` are duplicate fields matching Rachna's backend schema (`POST /violations`).
 
 ---
@@ -137,10 +158,10 @@ pytest cv-model/tests/ -v
 
 | Limitation | Impact | Mitigation |
 |---|---|---|
-| GPS stubbed at 0,0 | `restricted-zone-entry` always compares stub position | Wire Rashi's MAVLink feed in Week 10 |
+| GPS stub is the default | `restricted-zone-entry` compares stub position | Use `--gps mavlink` on the Pi for real fixes |
 | Pixel-distance fallback for proximity | Not geographically calibrated | GPS proximity replaces this in Week 10 |
 | No real flight footage yet | Weeks 8–9 reports use proxy aerial video (Pexels CC0) | Replace with Rashi's footage when available |
-| Model not yet on Pi 5 | FPS on Pi unknown | ONNX/NCNN export ready; benchmark in Week 10 |
+| Model not yet benchmarked on Raspberry Pi 4 | FPS on Pi unknown | ONNX/NCNN export ready; benchmark on the Pi |
 | `full_v2` trained on simulated data only | May miss altitude/blur patterns from real flight | Field fine-tuning in Week 11 |
 
 ---

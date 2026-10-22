@@ -1,5 +1,5 @@
 """
-Edge inference for Raspberry Pi 5 (#61 PARTIAL-SIM until real Pi camera + Pixhawk GPS).
+Edge inference for Raspberry Pi 4 (#61 PARTIAL-SIM until real Pi camera + Pixhawk GPS).
 
 Usage (on Pi or dev machine):
   python -m inference.infer_pi \\
@@ -7,6 +7,10 @@ Usage (on Pi or dev machine):
     --model models/full_v2/best.pt \\
     --gps stub \\
     --imgsz 416 --frame-skip 1
+
+On the Pi (CSI camera, push violations to the laptop dashboard over Wi-Fi):
+  python -m inference.infer_pi --source csi --model weights/best.pt --gps stub \\
+    --send --backend http://<LAPTOP_IP>:8000
 """
 
 from __future__ import annotations
@@ -34,6 +38,7 @@ from inference.infer_video import (
     draw_bbox,
     make_violation_event,
 )
+from inference import laptop_client
 from inference.person_down import detect_person_down
 from geofence.proximity_check import is_machinery_proximity_violation_pixels
 from geofence.restricted_zone import SAMPLE_ZONES, is_in_restricted_zone
@@ -45,6 +50,39 @@ def build_gps(mode: str) -> GpsProvider:
     return StubGps()
 
 
+class _CsiCapture:
+    """cv2.VideoCapture-like wrapper: Picamera2 if available, else cv2.VideoCapture(0)."""
+
+    def __init__(self, source: str):
+        self._picam = None
+        self._cap = None
+        if source == "csi":
+            try:
+                from picamera2 import Picamera2
+                self._picam = Picamera2()
+                self._picam.configure(self._picam.create_video_configuration(
+                    main={"size": (640, 480), "format": "RGB888"}))
+                self._picam.start()
+                return
+            except Exception:
+                self._picam = None
+        self._cap = cv2.VideoCapture(0 if source == "csi" else int(source))
+
+    def isOpened(self) -> bool:
+        return self._picam is not None or self._cap.isOpened()
+
+    def read(self):
+        if self._picam is not None:
+            return True, self._picam.capture_array()
+        return self._cap.read()
+
+    def release(self) -> None:
+        if self._picam is not None:
+            self._picam.stop()
+        else:
+            self._cap.release()
+
+
 def run_pi_inference(
     video_path: str,
     model_path: str,
@@ -53,12 +91,17 @@ def run_pi_inference(
     imgsz: int = 416,
     frame_skip: int = 1,
     max_frames: int | None = None,
+    source: str | None = None,
+    send: bool = False,
+    backend: str | None = None,
 ) -> dict:
     model = YOLO(model_path)
     gps = build_gps(gps_mode)
-    cap = cv2.VideoCapture(video_path)
+    cap = _CsiCapture(source) if source else cv2.VideoCapture(video_path)
     if not cap.isOpened():
-        raise FileNotFoundError(video_path)
+        raise FileNotFoundError(source or video_path)
+    if send:
+        laptop_client.check_backend(backend or laptop_client.LAPTOP_URL)
 
     Path(output_jsonl).parent.mkdir(parents=True, exist_ok=True)
     events = []
@@ -95,6 +138,8 @@ def run_pi_inference(
                                                   fix.lat, fix.lon)
                         jf.write(__import__("json").dumps(ev) + "\n")
                         events.append(ev)
+                        if send:
+                            laptop_client.send_violation(frame, ev, backend)
 
                     if cls_name == "person":
                         persons.append((bbox, conf))
@@ -103,6 +148,8 @@ def run_pi_inference(
                                                       fix.lat, fix.lon)
                             jf.write(__import__("json").dumps(ev) + "\n")
                             events.append(ev)
+                            if send:
+                                laptop_client.send_violation(frame, ev, backend)
                         for _, zone in SAMPLE_ZONES.items():
                             if is_in_restricted_zone(fix.lat, fix.lon, zone):
                                 ev = make_violation_event(
@@ -111,6 +158,8 @@ def run_pi_inference(
                                 )
                                 jf.write(__import__("json").dumps(ev) + "\n")
                                 events.append(ev)
+                                if send:
+                                    laptop_client.send_violation(frame, ev, backend)
                                 break
 
                     if cls_name == "machinery":
@@ -127,6 +176,8 @@ def run_pi_inference(
                         )
                         jf.write(__import__("json").dumps(ev) + "\n")
                         events.append(ev)
+                        if send:
+                            laptop_client.send_violation(frame, ev, backend)
 
             processed += 1
             frame_idx += 1
@@ -135,7 +186,7 @@ def run_pi_inference(
     elapsed = time.time() - t0
     fps = processed / elapsed if elapsed > 0 else 0.0
     is_pi = "raspberry" in platform.platform().lower() or Path("/proc/device-tree/model").exists()
-    label = "Raspberry Pi" if is_pi else "NOT PI 5 — indicative only"
+    label = "Raspberry Pi" if is_pi else "NOT PI 4 — indicative only"
     report = Path(output_jsonl).parent / "week10_pi_fps_benchmark.md"
     report.write_text(
         f"# Week 10 — Pi FPS Benchmark\n\n"
@@ -149,7 +200,7 @@ def run_pi_inference(
         f"| FPS | {fps:.2f} |\n"
         f"| GPS mode | {gps_mode} |\n"
         f"| Violation events | {len(events)} |\n\n"
-        f"Re-run on Pi 5: `python -m inference.infer_pi --video <clip> --model models/full_v2/best.pt --gps mavlink`\n",
+        f"Re-run on Raspberry Pi 4: `python -m inference.infer_pi --video <clip> --model models/full_v2/best.pt --gps mavlink`\n",
         encoding="utf-8",
     )
     print(f"[infer_pi] {processed} frames, {fps:.2f} FPS ({label})")
@@ -158,7 +209,10 @@ def run_pi_inference(
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--video", required=True)
+    ap.add_argument("--video", default=None)
+    ap.add_argument("--source", default=None, help='camera index or "csi" (alternative to --video)')
+    ap.add_argument("--backend", default=None, help="laptop backend URL (default: $SKYGUARD_BACKEND)")
+    ap.add_argument("--send", action="store_true", help="push violations to the laptop backend")
     ap.add_argument("--model", required=True)
     ap.add_argument("--output", default="reports/pi_violations.jsonl")
     ap.add_argument("--gps", choices=("stub", "mavlink"), default="stub")
@@ -166,6 +220,9 @@ if __name__ == "__main__":
     ap.add_argument("--frame-skip", type=int, default=1)
     ap.add_argument("--max-frames", type=int, default=None)
     args = ap.parse_args()
+    if not args.video and not args.source:
+        ap.error("one of --video or --source is required")
     run_pi_inference(
-        args.video, args.model, args.output, args.gps, args.imgsz, args.frame_skip, args.max_frames
+        args.video, args.model, args.output, args.gps, args.imgsz, args.frame_skip, args.max_frames,
+        source=args.source, send=args.send, backend=args.backend,
     )

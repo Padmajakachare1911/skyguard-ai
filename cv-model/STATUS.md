@@ -14,6 +14,27 @@
 
 ---
 
+## Workflow
+
+1. **Roboflow:** upload PPE images, annotate helmets/vests, create dataset versions.
+2. **Train** with Ultralytics (Colab/local) on the Roboflow export, then export the weights (`best.pt`, or NCNN/ONNX for faster Raspberry Pi 4 CPU inference) and copy them to the Pi.
+3. **Raspberry Pi 4:** run local YOLO inference on the CSI camera feed. No cloud request for any frame.
+4. **Violation detected:** the Pi sends ONLY the violation snapshot image and its metadata to the laptop over Wi-Fi (`inference/laptop_client.py`).
+5. **Laptop FastAPI backend:** saves the evidence in `backend/snapshots`, stores the violation in the DB, and broadcasts it on `/ws/violations`.
+6. **Dashboard:** shows the alert with timestamp, violation type, and GPS coordinates if available.
+
+### Run on Pi
+
+```bash
+python -m inference.infer_pi --source csi --model weights/best.pt --gps stub --send --backend http://<LAPTOP_IP>:8000
+```
+
+- `--backend` defaults to the `SKYGUARD_BACKEND` env var. `--gps mavlink` uses the Pixhawk fix; with `stub`/no fix, `0.0` is sent and the backend uses telemetry when available.
+- Per violation: JPEG is saved to `reports/pi_snapshots/`, uploaded to `POST /violations/upload-snapshot`, then metadata is POSTed to `POST /violations` with `image_url` set to the returned bare filename. Same-type violations are throttled (5 s cooldown); unreachable-laptop sends are queued and retried, never blocking inference.
+- Laptop checklist: `run_backend.bat` binds `0.0.0.0:8000` (CORS open); allow inbound TCP 8000 in Windows Firewall; Pi and laptop on the same Wi-Fi.
+
+---
+
 ## Issue Status Table
 
 | Issue | Status | Evidence | Notes |
@@ -31,7 +52,7 @@
 | #49 | DONE | `geofence/proximity_check.py`, `tests/test_geofence.py`, `reports/week7_geofence_test_results.md` | 25/25 pytest pass |
 | #55 | PARTIAL-SIM | `inference/eval_footage.py`, `reports/week9_fp_fn_summary.md` | Proxy test-set eval; re-run on `datasets/flight_raw/` |
 | #58 | PARTIAL-SIM | `reports/week9_fp_fn.csv`, `reports/fp_fn_crops/` | Same proxy run; needs real flight labels |
-| #61 | PARTIAL-SIM | `inference/infer_pi.py`, `reports/week10_pi_fps_benchmark.md` | Dev-machine proxy; re-benchmark on Pi 5 + MAVLink |
+| #61 | PARTIAL-SIM | `inference/infer_pi.py`, `reports/week10_pi_fps_benchmark.md` | Dev-machine proxy; re-benchmark on Raspberry Pi 4 + MAVLink (`--gps mavlink` supported) |
 | #65 | BLOCKED | `scripts/merge_field_data.py` | No real failure crops yet |
 | #66 | PARTIAL-SIM | `inference/run_matrix.py`, `reports/week12_multi_condition_matrix.md` | Proxy matrix; dusk clip NOT TESTED |
 
@@ -42,7 +63,7 @@
 | Dependency | Owner | Evidence found (file/commit) | Status |
 |------------|-------|------------------------------|--------|
 | POST /violations API | Rachna | `backend/app/routers/violations.py`, commit `27eaa82` | AVAILABLE |
-| WebSocket live feed | Rachna | No WebSocket in `backend/` | MISSING |
+| WebSocket live feed (`/ws/violations`) | Rachna | Backend broadcasts new violations; Pi pushes via `laptop_client.py` | AVAILABLE |
 | MAVLink GPS client (lat/lon/timestamp) | Rashi | `flight-software/telemetry_reader.py`, `issue 24/telemetry_geofence.py` — SITL only, prints lat/lon | PARTIAL |
 | Real Pixhawk GPS (#43/#48) | Rashi | No commits matching #43/#48; SITL telemetry only | MISSING |
 | Real flight logs / video (#52) | Rashi/Aarthi | No `.mp4`/footage in repo; no #52 commit | MISSING |
@@ -79,7 +100,7 @@ Adapter in `inference/adapters.py` strips uuid/id and maps lat/lon → latitude/
 - [x] Proxy #55/#58/#66: `eval_footage`, `run_matrix` on merged test + `construction_sample.mp4` (2026-09-30)
 - [x] Proxy #61: `infer_pi.py` on dev GPU (2026-09-30)
 - [ ] #55/#58: Re-run `eval_footage` on `datasets/flight_raw/` when Rashi/Aarthi upload it
-- [ ] #61: Re-benchmark `infer_pi.py` on Pi 5 with real MAVLink GPS
+- [ ] #61: Re-benchmark `infer_pi.py` on Raspberry Pi 4 with real MAVLink GPS
 - [ ] #65: Retrain `field_v1` on real flight failure crops
 - [ ] #66: Replace NOT TESTED matrix cells with real multi-flight clips
 - [ ] #23: Test `--post-url` against Rachna's live backend (core JSONL path is independent)
